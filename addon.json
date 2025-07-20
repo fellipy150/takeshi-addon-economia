@@ -1,23 +1,35 @@
 {
-  "name": "QeA",
-  "version": "0.0.1",
-  "description": "Um addon de Perguntas e Respostas (Question and Answer) que responde a perguntas pré-definidas.",
+  "name": "economia",
+  "version": "0.1.0",
+  "description": "Addon para testar o sistema de addons, faz um sistema de economia bem simples pra testar aa features de um addon.",
   "author": "Paulo",
-  "repository": "",
+  "repository": "https://github.com/fellipy150/takeshi-addon-economia",
   "main": "index.js",
-  "commands": [
-    "qea",
-    "qa",
-    "qua"
-  ],
+  "commands": ["saldo", "trabalhar", "transferir", "comprar"],
   "dependencies": {},
   "permissions": {
     "baileys_bridge": [
       "sendReply",
-      "sendErrorReply"
+      "sendSuccessReply",
+      "sendErrorReply",
+      "sendWarningReply",
+      "sendWaitReply",
+      "sendReact",
+      "sendText",
+      "socket"
     ],
-    "context_info": [],
+    "context_info": [
+      "userJid",
+      "remoteJid",
+      "isGroup",
+      "fullArgs",
+      "args",
+      "webMessage",
+      "isReply",
+      "replyJid",
+      "getGroupMetadata",
+      "getGroupParticipants"
+    ],
     "network_access": ""
   }
 }
-

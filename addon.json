@@ -1,0 +1,23 @@
+{
+  "name": "QeA",
+  "version": "0.0.1",
+  "description": "Um addon de Perguntas e Respostas (Question and Answer) que responde a perguntas pré-definidas.",
+  "author": "Paulo",
+  "repository": "",
+  "main": "index.js",
+  "commands": [
+    "qea",
+    "qa",
+    "qua"
+  ],
+  "dependencies": {},
+  "permissions": {
+    "baileys_bridge": [
+      "sendReply",
+      "sendErrorReply"
+    ],
+    "context_info": [],
+    "network_access": ""
+  }
+}
+

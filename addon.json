@@ -5,7 +5,7 @@
   "author": "Paulo",
   "repository": "https://github.com/fellipy150/takeshi-addon-economia",
   "main": "index.js",
-  "commands": ["saldo", "trabalhar", "transferir", "comprar"],
+  "commands": ["saldo", "trabalhar", "transferir", "comprar", "loja", "inventario"],
   "dependencies": {},
   "permissions": {
     "baileys_bridge": [
@@ -14,8 +14,12 @@
       "sendErrorReply",
       "sendWarningReply",
       "sendWaitReply",
+      "editMessage",
       "sendReact",
-      "sendText",
+      "sendSuccessReact",
+      "sendWarningReact",
+      "removeReaction",
+      "getGroupParticipants",
       "socket"
     ],
     "context_info": [
@@ -24,11 +28,7 @@
       "isGroup",
       "fullArgs",
       "args",
-      "webMessage",
-      "isReply",
-      "replyJid",
-      "getGroupMetadata",
-      "getGroupParticipants"
+      "webMessage"
     ],
     "network_access": ""
   }

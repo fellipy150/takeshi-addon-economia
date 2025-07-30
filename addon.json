@@ -21,7 +21,7 @@
     "dangerous": {
       "node_modules": ["fs", "path"],
       "filesystem": {
-        "scope": "addon",
+        "scope": "self",
         "reason": "O addon precisa ler e escrever o arquivo 'economia.json' para salvar os dados dos usuários."
       }
     }

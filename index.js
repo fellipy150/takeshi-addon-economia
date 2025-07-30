@@ -1,69 +1,120 @@
-const fs = require('node:fs');
-const path = require('node:path');
+/**
+ * Addon de Sistema de Economia para Takeshi Bot (v1.3.0)
+ *
+ * Adaptado para o novo template de addons, com as seguintes melhorias:
+ * - Uso da bridge para acessar módulos nativos (fs, path) de forma segura.
+ * - Estrutura de permissões atualizada no addon.json.
+ * - Lógica de comandos centralizada na função `handle`.
+ * - Remoção de dependências e parâmetros desnecessários.
+ *
+ * @format
+ * @author Paulo & Gemini
+ * @version 1.3.0
+ */
 
-const CD = 20 * 60 * 1000;
-const RECOMP = 25;
-
-const LOJA = [
-  { id: 'pao', nome: 'Pão Francês', preco: 5, desc: 'Quentinho e crocante.' },
-  { id: 'agua', nome: 'Garrafa de Água', preco: 8, desc: 'Para matar a sede.' },
-  { id: 'maca', nome: 'Maçã', preco: 12, desc: 'Uma maçã por dia...' },
-  { id: 'pocao', nome: 'Poção de Cura', preco: 50, desc: 'Restaura sua energia.' },
-  { id: 'amuleto', nome: 'Amuleto da Sorte', preco: 200, desc: 'Aumenta suas chances de sucesso.' },
-  { id: 'espada', nome: 'Espada Lendária', preco: 1000, desc: 'Uma espada forjada por lendas.' },
-  {
-    id: 'armadura',
-    nome: 'Armadura Divina',
-    preco: 2500,
-    desc: 'Proteção abençoada pelos deuses.',
-  },
+// --- Configurações da Economia ---
+const WORK_COOLDOWN_MS = 20 * 60 * 1000; // 20 minutos
+const WORK_REWARD = 25;
+const SHOP_ITEMS = [
+  { id: 'pao', name: 'Pão Francês', price: 5, description: 'Quentinho e crocante.' },
+  { id: 'agua', name: 'Garrafa de Água', price: 8, description: 'Para matar a sede.' },
+  { id: 'maca', name: 'Maçã', price: 12, description: 'Uma maçã por dia...' },
+  { id: 'pocao_cura', name: 'Poção de Cura', price: 50, description: 'Restaura sua energia.' },
+  { id: 'amuleto_sorte', name: 'Amuleto da Sorte', price: 200, description: 'Aumenta suas chances de sucesso.' },
+  { id: 'espada_lendaria', name: 'Espada Lendária', price: 1000, description: 'Uma espada forjada por lendas.' },
+  { id: 'armadura_divina', name: 'Armadura Divina', price: 2500, description: 'Proteção abençoada pelos deuses.' },
 ];
 
-let arq;
+// --- Funções de Gerenciamento de Dados ---
 
-function init(p) {
-  if (!arq) arq = path.join(p, 'economia.json');
-  try {
-    if (!fs.existsSync(arq)) fs.writeFileSync(arq, JSON.stringify({}));
-  } catch (e) {
-    console.error('[ECONOMIA] Erro ao criar arquivo:', e);
+let fs, path, economyDataFile;
+
+/**
+ * Inicializa os módulos e o caminho do arquivo de dados.
+ * @param {object} bridge - A ponte de funções seguras.
+ * @param {string} addonPath - O caminho para a pasta do addon.
+ */
+function initialize(bridge, addonPath) {
+  if (!fs) {
+    fs = bridge.require('fs');
+    path = bridge.require('path');
+    economyDataFile = path.join(addonPath, 'economia.json');
   }
 }
 
-function ler() {
+/**
+ * Garante que o arquivo de dados da economia exista.
+ */
+function ensureEconomyFileExists() {
   try {
-    const dados = fs.readFileSync(arq, 'utf-8');
-    return JSON.parse(dados) || {};
-  } catch (e) {
-    console.error('[ECONOMIA] Erro ao ler:', e);
+    if (!fs.existsSync(economyDataFile)) {
+      fs.writeFileSync(economyDataFile, JSON.stringify({}));
+    }
+  } catch (error) {
+    console.error('[ECONOMIA-ADDON] Erro ao criar arquivo de economia:', error);
+  }
+}
+
+/**
+ * Lê e parseia o arquivo de dados da economia.
+ * @returns {object} O objeto contendo os dados de todos os usuários.
+ */
+function readEconomyData() {
+  try {
+    const fileContent = fs.readFileSync(economyDataFile, 'utf-8');
+    return JSON.parse(fileContent || '{}');
+  } catch (error) {
+    console.error('[ECONOMIA-ADDON] Erro ao ler dados da economia:', error);
     return {};
   }
 }
 
-function salvar(d) {
+/**
+ * Escreve dados no arquivo de economia.
+ * @param {object} data - O objeto de dados da economia a ser salvo.
+ */
+function writeEconomyData(data) {
   try {
-    fs.writeFileSync(arq, JSON.stringify(d, null, 2));
-  } catch (e) {
-    console.error('[ECONOMIA] Erro ao salvar:', e);
+    fs.writeFileSync(economyDataFile, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error('[ECONOMIA-ADDON] Erro ao escrever dados da economia:', error);
   }
 }
 
-function perfil(id) {
-  const db = ler();
-  if (!db[id]) {
-    db[id] = { grana: 0, ultTrab: 0, inv: [] };
-    salvar(db);
+/**
+ * Obtém ou cria o perfil de um usuário.
+ * @param {string} userJid - O JID do usuário.
+ * @returns {object} O perfil do usuário.
+ */
+function getUserProfile(userJid) {
+  const data = readEconomyData();
+  if (!data[userJid]) {
+    data[userJid] = {
+      balance: 0,
+      lastWork: 0,
+      inventory: [],
+    };
+    writeEconomyData(data);
   }
-  return db[id];
+  return data[userJid];
 }
 
-function attPerfil(id, dados) {
-  const db = ler();
-  db[id] = dados;
-  salvar(db);
+/**
+ * Atualiza o perfil de um usuário.
+ * @param {string} userJid - O JID do usuário.
+ * @param {object} profile - O perfil atualizado do usuário.
+ */
+function updateUserProfile(userJid, profile) {
+  const data = readEconomyData();
+  data[userJid] = profile;
+  writeEconomyData(data);
 }
 
-async function handle(ctx) {
+/**
+ * Função principal para comandos.
+ * @param {object} params - O objeto de parâmetros fornecido pelo Runner.
+ */
+async function handle(params) {
   const {
     sendErrorReply,
     sendWaitReply,
@@ -73,214 +124,228 @@ async function handle(ctx) {
     removeReaction,
     fullArgs,
     messageInfo,
-  } = ctx;
+    bridge, // Acesso à bridge para usar 'require'
+  } = params;
 
-  const id = messageInfo.userJid;
+  const userJid = messageInfo.userJid;
 
   try {
-    init(messageInfo.addonPath);
-    const cmd = messageInfo.commandName;
-    const keyOrig = messageInfo.webMessage.key;
-    const msg = await sendWaitReply(`⏳ Processando */${cmd}*...`);
-    const key = msg.key;
+    // Inicializa os módulos 'fs' e 'path' de forma segura através da bridge
+    initialize(bridge, messageInfo.addonPath);
+    ensureEconomyFileExists();
 
-    switch (cmd) {
+    const command = messageInfo.commandName;
+    const originalMessageKey = messageInfo.webMessage.key;
+
+    const sentMessage = await sendWaitReply(`⏳ Processando comando */${command}*...`);
+    const sentMessageKey = sentMessage.key;
+
+    switch (command) {
       case 'saldo': {
-        const p = perfil(id);
-        await editMessage(key, `💰 Saldo: *R$ ${p.grana.toFixed(2)}*`);
-        await sendSuccessReact(keyOrig);
-        await new Promise((r) => setTimeout(r, 4000));
-        await removeReaction(key);
+        const profile = getUserProfile(userJid);
+        await editMessage(
+          sentMessageKey,
+          `💰 Seu saldo atual é: *R$ ${profile.balance.toFixed(2)}*.`
+        );
+        await sendSuccessReact(originalMessageKey);
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        await removeReaction(sentMessageKey);
         break;
       }
 
       case 'trabalhar': {
-        const p = perfil(id);
-        const agora = Date.now();
-        const tempo = CD - (agora - p.ultTrab);
+        const profile = getUserProfile(userJid);
+        const currentTime = Date.now();
+        const remainingTime = WORK_COOLDOWN_MS - (currentTime - profile.lastWork);
 
-        if (tempo > 0) {
-          const min = Math.ceil(tempo / 60000);
-          await editMessage(key, `⏳ Descanse! Volte em *${min} min*.`);
-          await sendWarningReact(keyOrig);
+        if (remainingTime > 0) {
+          const minutes = Math.ceil(remainingTime / 60000);
+          await editMessage(
+            sentMessageKey,
+            `Você precisa descansar! Tente novamente em *${minutes} minuto(s)*.`
+          );
+          await sendWarningReact(originalMessageKey);
           return;
         }
 
-        p.grana += RECOMP;
-        p.ultTrab = agora;
-        attPerfil(id, p);
+        profile.balance += WORK_REWARD;
+        profile.lastWork = currentTime;
+        updateUserProfile(userJid, profile);
 
         await editMessage(
-          key,
-          `🎉 Trabalhou e ganhou *R$ ${RECOMP.toFixed(2)}*! Saldo: *R$ ${p.grana.toFixed(2)}*`
+          sentMessageKey,
+          `🎉 Você trabalhou e ganhou *R$ ${WORK_REWARD.toFixed(
+            2
+          )}*! Seu novo saldo é: *R$ ${profile.balance.toFixed(2)}*.`
         );
-        await sendSuccessReact(keyOrig);
+        await sendSuccessReact(originalMessageKey);
         break;
       }
 
       case 'loja':
       case 'comprar': {
-        if (!fullArgs || cmd === 'loja') {
-          let lista = '🛒 *Loja:*\n\n';
-          LOJA.forEach((i) => {
-            lista += `*${i.nome}* - R$ ${i.preco.toFixed(2)}\n_${i.desc}_\n\n`;
+        if (!fullArgs || command === 'loja') {
+          let shopList = '🛒 *Itens disponíveis na loja:*\n\n';
+          SHOP_ITEMS.forEach((item) => {
+            shopList += `*${item.name}* - R$ ${item.price.toFixed(2)}\n`;
+            shopList += `_${item.description}_\n\n`;
           });
-          lista += `Use: */comprar <item>*`;
-          await editMessage(key, lista);
-          await sendSuccessReact(keyOrig);
+          shopList += `Para comprar, use: */comprar <nome do item>*`;
+          await editMessage(sentMessageKey, shopList);
+          await sendSuccessReact(originalMessageKey);
           return;
         }
 
-        const nomeItem = fullArgs.toLowerCase().trim();
-        const item = LOJA.find((i) => i.nome.toLowerCase() === nomeItem || i.id === nomeItem);
+        const itemName = fullArgs.toLowerCase().trim();
+        const itemToBuy = SHOP_ITEMS.find(
+          (item) => item.name.toLowerCase() === itemName || item.id.toLowerCase() === itemName
+        );
 
-        if (!item) {
-          await editMessage(key, `Item "${fullArgs}" não encontrado. Use */loja*`);
-          await sendWarningReact(keyOrig);
-          return;
-        }
-
-        const p = perfil(id);
-
-        if (p.grana < item.preco) {
+        if (!itemToBuy) {
           await editMessage(
-            key,
-            `Saldo insuficiente (R$ ${p.grana.toFixed(2)}). Item: *${
-              item.nome
-            }* custa R$ ${item.preco.toFixed(2)}.`
+            sentMessageKey,
+            `O item "${fullArgs}" não foi encontrado na loja. Use */loja* para ver a lista.`
           );
-          await sendWarningReact(keyOrig);
+          await sendWarningReact(originalMessageKey);
           return;
         }
 
-        p.grana -= item.preco;
-        p.inv = Array.isArray(p.inv) ? p.inv : [];
-        p.inv.push(item.id);
-        attPerfil(id, p);
+        const profile = getUserProfile(userJid);
+
+        if (profile.balance < itemToBuy.price) {
+          await editMessage(
+            sentMessageKey,
+            `Seu saldo (R$ ${profile.balance.toFixed(2)}) é insuficiente para comprar *${
+              itemToBuy.name
+            }* (R$ ${itemToBuy.price.toFixed(2)}).`
+          );
+          await sendWarningReact(originalMessageKey);
+          return;
+        }
+
+        profile.balance -= itemToBuy.price;
+        if (!Array.isArray(profile.inventory)) {
+          profile.inventory = [];
+        }
+        profile.inventory.push(itemToBuy.id);
+        updateUserProfile(userJid, profile);
 
         await editMessage(
-          key,
-          `🛍️ Comprou *${item.nome}* por *R$ ${item.preco.toFixed(
+          sentMessageKey,
+          `🛍️ Você comprou *${itemToBuy.name}* por *R$ ${itemToBuy.price.toFixed(
             2
-          )}*. Novo saldo: *R$ ${p.grana.toFixed(2)}*.`
+          )}*! Seu novo saldo é: *R$ ${profile.balance.toFixed(2)}*.`
         );
-        await sendSuccessReact(keyOrig);
+        await sendSuccessReact(originalMessageKey);
         break;
       }
 
       case 'inventario': {
-        const p = perfil(id);
-        if (!p.inv || p.inv.length === 0) {
-          await editMessage(key, '🎒 Inventário vazio.');
-          await sendSuccessReact(keyOrig);
+        const profile = getUserProfile(userJid);
+        if (!profile.inventory || profile.inventory.length === 0) {
+          await editMessage(sentMessageKey, '🎒 Seu inventário está vazio.');
+          await sendSuccessReact(originalMessageKey);
           return;
         }
 
-        let txt = '🎒 *Inventário:*\n\n';
-        const cont = p.inv.reduce((acc, id) => {
+        let inventoryList = '🎒 *Seu inventário:*\n\n';
+        const itemCounts = profile.inventory.reduce((acc, id) => {
           acc[id] = (acc[id] || 0) + 1;
           return acc;
         }, {});
 
-        for (const id in cont) {
-          const item = LOJA.find((i) => i.id === id);
-          if (item) txt += `*${item.nome}* (x${cont[id]})\n`;
+        for (const id in itemCounts) {
+          const item = SHOP_ITEMS.find((i) => i.id === id);
+          if (item) {
+            inventoryList += `*${item.name}* (x${itemCounts[id]})\n`;
+          }
         }
 
-        await editMessage(key, txt);
-        await sendSuccessReact(keyOrig);
+        await editMessage(sentMessageKey, inventoryList);
+        await sendSuccessReact(originalMessageKey);
         break;
       }
 
       case 'transferir': {
-        console.log('[TRANSFERIR] fullArgs:', fullArgs);
-
-        const partes = fullArgs.split(' ');
-        console.log('[TRANSFERIR] partes:', partes);
-
-        if (partes.length < 2) {
-          await editMessage(key, 'Uso: */transferir @user <valor>*');
-          await sendWarningReact(keyOrig);
+        const parts = fullArgs.split(' ');
+        if (parts.length < 2) {
+          await editMessage(sentMessageKey, 'Uso correto: */transferir @usuário <valor>*');
+          await sendWarningReact(originalMessageKey);
           return;
         }
 
-        const valorRaw = partes[1].replace(',', '.');
-        const val = parseFloat(valorRaw);
-        console.log('[TRANSFERIR] valor:', val);
-
-        let dest =
+        const amount = parseInt(parts[1]);
+        const recipientJid =
           messageInfo.webMessage.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-        console.log('[TRANSFERIR] dest original (mentionedJid):', dest);
 
-        // Tenta extrair número manualmente se mentionedJid não foi detectado
-        if (!dest && partes[0]) {
-          const numero = partes[0].replace(/\D/g, '');
-          if (numero.length >= 10) {
-            dest = `${numero}@s.whatsapp.net`;
-            console.log('[TRANSFERIR] dest fallback (via número direto):', dest);
-          }
-        }
-
-        if (!dest) {
-          await editMessage(key, 'Mencione um usuário. Uso: */transferir @user <valor>*');
-          await sendWarningReact(keyOrig);
-          return;
-        }
-
-        if (isNaN(val) || val <= 0) {
-          await editMessage(key, 'Valor deve ser positivo.');
-          await sendWarningReact(keyOrig);
-          return;
-        }
-
-        if (dest === id) {
-          await editMessage(key, 'Não pode transferir para si mesmo!');
-          await sendWarningReact(keyOrig);
-          return;
-        }
-
-        const de = perfil(id);
-        console.log('[TRANSFERIR] perfil remetente:', de);
-
-        if (de.grana < val) {
+        if (!recipientJid) {
           await editMessage(
-            key,
-            `Saldo insuficiente: R$ ${de.grana.toFixed(2)} < R$ ${val.toFixed(2)}`
+            sentMessageKey,
+            'Você precisa mencionar um usuário para transferir.'
           );
-          await sendWarningReact(keyOrig);
+          await sendWarningReact(originalMessageKey);
           return;
         }
 
-        const para = perfil(dest);
-        console.log('[TRANSFERIR] perfil destinatário:', para);
+        if (isNaN(amount) || amount <= 0) {
+          await editMessage(
+            sentMessageKey,
+            'O valor da transferência deve ser um número positivo.'
+          );
+          await sendWarningReact(originalMessageKey);
+          return;
+        }
 
-        de.grana -= val;
-        para.grana += val;
-        attPerfil(id, de);
-        attPerfil(dest, para);
+        if (recipientJid === userJid) {
+          await editMessage(sentMessageKey, 'Você não pode transferir dinheiro para si mesmo!');
+          await sendWarningReact(originalMessageKey);
+          return;
+        }
 
-        console.log('[TRANSFERIR] transferência concluída');
+        const senderProfile = getUserProfile(userJid);
+        if (senderProfile.balance < amount) {
+          await editMessage(
+            sentMessageKey,
+            `Seu saldo (R$ ${senderProfile.balance.toFixed(
+              2
+            )}) é insuficiente para transferir *R$ ${amount.toFixed(2)}*.`
+          );
+          await sendWarningReact(originalMessageKey);
+          return;
+        }
+
+        const recipientProfile = getUserProfile(recipientJid);
+        senderProfile.balance -= amount;
+        recipientProfile.balance += amount;
+        updateUserProfile(userJid, senderProfile);
+        updateUserProfile(recipientJid, recipientProfile);
 
         await editMessage(
-          key,
-          `💸 Transferiu *R$ ${val.toFixed(2)}* para @${
-            dest.split('@')[0]
-          }. Saldo atual: *R$ ${de.grana.toFixed(2)}*.`,
-          [dest]
+          sentMessageKey,
+          `💸 Você transferiu *R$ ${amount.toFixed(2)}* para @${
+            recipientJid.split('@')[0]
+          }! Seu novo saldo é: *R$ ${senderProfile.balance.toFixed(2)}*.`,
+          [recipientJid]
         );
-        await sendSuccessReact(keyOrig);
+        await sendSuccessReact(originalMessageKey);
         break;
       }
 
       default:
-        await editMessage(key, `Comando desconhecido: ${cmd}`);
-        await sendWarningReact(keyOrig);
+        await editMessage(sentMessageKey, `Comando de economia não reconhecido: ${command}.`);
+        await sendWarningReact(originalMessageKey);
         break;
     }
-  } catch (e) {
-    console.error(`Erro no addon [${messageInfo.addonName}]: ${e.message}`);
-    if (sendErrorReply) await sendErrorReply('Erro interno no addon.');
+  } catch (error) {
+    console.error(`Erro no handle do addon [${messageInfo.addonName}]:`, error);
+    if (sendErrorReply) {
+      await sendErrorReply('Ocorreu um problema interno ao executar este comando.');
+    }
   }
 }
 
-module.exports = { handle };
+// Como este addon não usa gatilhos, exportamos apenas a função `handle`.
+module.exports = {
+  handle,
+};
+

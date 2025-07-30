@@ -1,35 +1,29 @@
 {
   "name": "economia",
-  "version": "0.1.0",
-  "description": "Addon para testar o sistema de addons, faz um sistema de economia bem simples pra testar aa features de um addon.",
-  "author": "Paulo",
-  "repository": "https://github.com/fellipy150/takeshi-addon-economia",
+  "version": "1.3.0",
+  "description": "Addon de sistema de economia, adaptado para o novo template de addons.",
+  "author": "Paulo & Gemini",
+  "repository": "https://github.com/seu-usuario/seu-repo-de-addon",
   "main": "index.js",
   "commands": ["saldo", "trabalhar", "transferir", "comprar", "loja", "inventario"],
+  "triggers": {},
   "dependencies": {},
   "permissions": {
     "baileys_bridge": [
-      "sendReply",
-      "sendSuccessReply",
-      "sendErrorReply",
-      "sendWarningReply",
       "sendWaitReply",
+      "sendErrorReply",
       "editMessage",
-      "sendReact",
       "sendSuccessReact",
       "sendWarningReact",
-      "removeReaction",
-      "getGroupParticipants",
-      "socket"
+      "removeReaction"
     ],
-    "context_info": [
-      "userJid",
-      "remoteJid",
-      "isGroup",
-      "fullArgs",
-      "args",
-      "webMessage"
-    ],
-    "network_access": ""
+    "context_info": ["userJid", "webMessage"],
+    "dangerous": {
+      "node_modules": ["fs", "path"],
+      "filesystem": {
+        "scope": "addon",
+        "reason": "O addon precisa ler e escrever o arquivo 'economia.json' para salvar os dados dos usuários."
+      }
+    }
   }
 }

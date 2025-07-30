@@ -2,7 +2,7 @@
   "name": "economia",
   "version": "1.3.0",
   "description": "Addon de sistema de economia, adaptado para o novo template de addons.",
-  "author": "Paulo & Gemini",
+  "author": "Paulo",
   "repository": "https://github.com/seu-usuario/seu-repo-de-addon",
   "main": "index.js",
   "commands": ["saldo", "trabalhar", "transferir", "comprar", "loja", "inventario"],

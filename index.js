@@ -8,7 +8,7 @@
  * - Remoção de dependências e parâmetros desnecessários.
  *
  * @format
- * @author Paulo & Gemini
+ * @author Paulo
  * @version 1.3.0
  */
 
@@ -20,9 +20,24 @@ const SHOP_ITEMS = [
   { id: 'agua', name: 'Garrafa de Água', price: 8, description: 'Para matar a sede.' },
   { id: 'maca', name: 'Maçã', price: 12, description: 'Uma maçã por dia...' },
   { id: 'pocao_cura', name: 'Poção de Cura', price: 50, description: 'Restaura sua energia.' },
-  { id: 'amuleto_sorte', name: 'Amuleto da Sorte', price: 200, description: 'Aumenta suas chances de sucesso.' },
-  { id: 'espada_lendaria', name: 'Espada Lendária', price: 1000, description: 'Uma espada forjada por lendas.' },
-  { id: 'armadura_divina', name: 'Armadura Divina', price: 2500, description: 'Proteção abençoada pelos deuses.' },
+  {
+    id: 'amuleto_sorte',
+    name: 'Amuleto da Sorte',
+    price: 200,
+    description: 'Aumenta suas chances de sucesso.',
+  },
+  {
+    id: 'espada_lendaria',
+    name: 'Espada Lendária',
+    price: 1000,
+    description: 'Uma espada forjada por lendas.',
+  },
+  {
+    id: 'armadura_divina',
+    name: 'Armadura Divina',
+    price: 2500,
+    description: 'Proteção abençoada pelos deuses.',
+  },
 ];
 
 // --- Funções de Gerenciamento de Dados ---
@@ -279,10 +294,7 @@ async function handle(params) {
           messageInfo.webMessage.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
 
         if (!recipientJid) {
-          await editMessage(
-            sentMessageKey,
-            'Você precisa mencionar um usuário para transferir.'
-          );
+          await editMessage(sentMessageKey, 'Você precisa mencionar um usuário para transferir.');
           await sendWarningReact(originalMessageKey);
           return;
         }
@@ -348,4 +360,3 @@ async function handle(params) {
 module.exports = {
   handle,
 };
-

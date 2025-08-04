@@ -1,28 +1,21 @@
 {
-  "name": "economia",
-  "version": "1.3.0",
-  "description": "Adiciona um sistema de economia completo, permitindo que os usuários trabalhem, comprem itens, façam transferências e gerenciem seu saldo e inventário.",
-  "author": "Paulo",
-  "repository": "https://github.com/fellipy150/takeshi-addon-economia",
+  "name": "Economia",
+  "version": "1.3.5",
+  "description": "Um sistema de economia completo com saldo, trabalho, loja, inventário e transferências.",
+  "author": "Paulo & Gemini",
+  "repository": "https://github.com/user/repo",
   "main": "index.js",
-  "commands": ["saldo", "trabalhar", "transferir", "comprar", "loja", "inventario"],
+  "commands": ["saldo", "trabalhar", "loja", "comprar", "inventario", "transferir"],
   "triggers": {},
   "dependencies": {},
   "permissions": {
-    "baileys_bridge": [
-      "sendWaitReply",
-      "sendErrorReply",
-      "editMessage",
-      "sendSuccessReact",
-      "sendWarningReact",
-      "removeReaction"
-    ],
+    "baileys_bridge": ["sendWaitReply", "editMessage", "sendSuccessReact", "sendWarningReact"],
     "context_info": ["userJid", "webMessage"],
     "dangerous": {
       "node_modules": ["fs", "path"],
       "filesystem": {
         "scope": "self",
-        "reason": "Esta permissão é necessária para salvar o saldo, o inventário e o progresso dos usuários de forma persistente na pasta do addon."
+        "reason": "Este addon precisa salvar os dados de economia dos usuários em um arquivo JSON dentro de sua própria pasta."
       }
     }
   }

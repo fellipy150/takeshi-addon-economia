@@ -1,19 +1,4 @@
-/**
- * Addon de Sistema de Economia para Takeshi Bot (v1.3.0)
- *
- * Adaptado para o novo template de addons, com as seguintes melhorias:
- * - Uso da bridge para acessar módulos nativos (fs, path) de forma segura.
- * - Estrutura de permissões atualizada no addon.json.
- * - Lógica de comandos centralizada na função `handle`.
- * - Remoção de dependências e parâmetros desnecessários.
- *
- * @format
- * @author Paulo
- * @version 1.3.0
- */
-
-// --- Configurações da Economia ---
-const WORK_COOLDOWN_MS = 20 * 60 * 1000; // 20 minutos
+const WORK_COOLDOWN_MS = 20 * 60 * 1000;
 const WORK_REWARD = 25;
 const SHOP_ITEMS = [
   { id: 'pao', name: 'Pão Francês', price: 5, description: 'Quentinho e crocante.' },
@@ -40,141 +25,91 @@ const SHOP_ITEMS = [
   },
 ];
 
-// --- Funções de Gerenciamento de Dados ---
-
-let fs, path, economyDataFile;
-
-/**
- * Inicializa os módulos e o caminho do arquivo de dados.
- * @param {object} bridge - A ponte de funções seguras.
- * @param {string} addonPath - O caminho para a pasta do addon.
- */
-function initialize(bridge, addonPath) {
-  if (!fs) {
-    fs = bridge.require('fs');
-    path = bridge.require('path');
-    economyDataFile = path.join(addonPath, 'economia.json');
-  }
-}
-
-/**
- * Garante que o arquivo de dados da economia exista.
- */
-function ensureEconomyFileExists() {
+function readEconomyData(fs, path, addonPath) {
+  console.log('[DEBUG] Entrando em readEconomyData');
+  const economyDataFile = path.join(addonPath, 'economia.json');
   try {
+    console.log(`[DEBUG] Verificando existência de ${economyDataFile}`);
     if (!fs.existsSync(economyDataFile)) {
+      console.log('[DEBUG] Arquivo não existe. Criando novo.');
       fs.writeFileSync(economyDataFile, JSON.stringify({}));
     }
-  } catch (error) {
-    console.error('[ECONOMIA-ADDON] Erro ao criar arquivo de economia:', error);
-  }
-}
-
-/**
- * Lê e parseia o arquivo de dados da economia.
- * @returns {object} O objeto contendo os dados de todos os usuários.
- */
-function readEconomyData() {
-  try {
     const fileContent = fs.readFileSync(economyDataFile, 'utf-8');
+    console.log('[DEBUG] Dados lidos com sucesso');
     return JSON.parse(fileContent || '{}');
   } catch (error) {
-    console.error('[ECONOMIA-ADDON] Erro ao ler dados da economia:', error);
+    console.error('[ERROR] Erro ao ler dados:', error);
     return {};
   }
 }
 
-/**
- * Escreve dados no arquivo de economia.
- * @param {object} data - O objeto de dados da economia a ser salvo.
- */
-function writeEconomyData(data) {
+function writeEconomyData(fs, path, addonPath, data) {
+  console.log('[DEBUG] Entrando em writeEconomyData');
+  const economyDataFile = path.join(addonPath, 'economia.json');
   try {
     fs.writeFileSync(economyDataFile, JSON.stringify(data, null, 2));
+    console.log('[DEBUG] Dados escritos com sucesso');
   } catch (error) {
-    console.error('[ECONOMIA-ADDON] Erro ao escrever dados da economia:', error);
+    console.error('[ERROR] Erro ao escrever dados:', error);
   }
 }
 
-/**
- * Obtém ou cria o perfil de um usuário.
- * @param {string} userJid - O JID do usuário.
- * @returns {object} O perfil do usuário.
- */
-function getUserProfile(userJid) {
-  const data = readEconomyData();
+function getUserProfile(data, userJid) {
+  console.log(`[DEBUG] getUserProfile - JID: ${userJid}`);
   if (!data[userJid]) {
-    data[userJid] = {
-      balance: 0,
-      lastWork: 0,
-      inventory: [],
-    };
-    writeEconomyData(data);
+    console.log('[DEBUG] Perfil não encontrado, criando novo');
+    data[userJid] = { balance: 0, lastWork: 0, inventory: [] };
+    return { profile: data[userJid], needsUpdate: true };
   }
-  return data[userJid];
+  console.log('[DEBUG] Perfil existente encontrado');
+  return { profile: data[userJid], needsUpdate: false };
 }
 
-/**
- * Atualiza o perfil de um usuário.
- * @param {string} userJid - O JID do usuário.
- * @param {object} profile - O perfil atualizado do usuário.
- */
-function updateUserProfile(userJid, profile) {
-  const data = readEconomyData();
-  data[userJid] = profile;
-  writeEconomyData(data);
-}
-
-/**
- * Função principal para comandos.
- * @param {object} params - O objeto de parâmetros fornecido pelo Runner.
- */
 async function handle(params) {
-  const {
-    sendErrorReply,
-    sendWaitReply,
-    editMessage,
-    sendSuccessReact,
-    sendWarningReact,
-    removeReaction,
-    fullArgs,
-    messageInfo,
-    bridge, // Acesso à bridge para usar 'require'
-  } = params;
+  console.log('[DEBUG] Entrando na função handle');
 
-  const userJid = messageInfo.userJid;
+  const { bridge, fullArgs, messageInfo } = params;
+  const { sendErrorReply, sendWaitReply, editMessage, sendSuccessReact, sendWarningReact } = bridge;
+  const { userJid, addonPath, commandName, addonName } = messageInfo;
+  const originalMessageKey = messageInfo.webMessage.key;
 
   try {
-    // Inicializa os módulos 'fs' e 'path' de forma segura através da bridge
-    initialize(bridge, messageInfo.addonPath);
-    ensureEconomyFileExists();
+    console.log(`[DEBUG] Comando: ${commandName}, User: ${userJid}`);
 
-    const command = messageInfo.commandName;
-    const originalMessageKey = messageInfo.webMessage.key;
+    const fs = bridge.require('fs');
+    const path = bridge.require('path');
 
-    const sentMessage = await sendWaitReply(`⏳ Processando comando */${command}*...`);
+    const sentMessage = await sendWaitReply(`⏳ Processando comando */${commandName}*...`);
     const sentMessageKey = sentMessage.key;
 
-    switch (command) {
+    const economyData = readEconomyData(fs, path, addonPath);
+
+    const getRecipientJid = () =>
+      messageInfo.webMessage?.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+
+    switch (commandName) {
       case 'saldo': {
-        const profile = getUserProfile(userJid);
+        console.log('[DEBUG] Entrando em saldo');
+        const { profile } = getUserProfile(economyData, userJid);
+        console.log(`[DEBUG] Saldo do usuário: ${profile.balance}`);
         await editMessage(
           sentMessageKey,
           `💰 Seu saldo atual é: *R$ ${profile.balance.toFixed(2)}*.`
         );
-        await sendSuccessReact(originalMessageKey);
-        await new Promise((resolve) => setTimeout(resolve, 4000));
-        await removeReaction(sentMessageKey);
         break;
       }
 
       case 'trabalhar': {
-        const profile = getUserProfile(userJid);
+        console.log('[DEBUG] Entrando em trabalhar');
+        const { profile } = getUserProfile(economyData, userJid);
         const currentTime = Date.now();
         const remainingTime = WORK_COOLDOWN_MS - (currentTime - profile.lastWork);
 
+        console.log(`[DEBUG] Cooldown restante: ${remainingTime}ms`);
+
         if (remainingTime > 0) {
           const minutes = Math.ceil(remainingTime / 60000);
+          console.log('[DEBUG] Cooldown ativo');
           await editMessage(
             sentMessageKey,
             `Você precisa descansar! Tente novamente em *${minutes} minuto(s)*.`
@@ -185,7 +120,7 @@ async function handle(params) {
 
         profile.balance += WORK_REWARD;
         profile.lastWork = currentTime;
-        updateUserProfile(userJid, profile);
+        console.log(`[DEBUG] Trabalho concluído. Novo saldo: ${profile.balance}`);
 
         await editMessage(
           sentMessageKey,
@@ -193,30 +128,32 @@ async function handle(params) {
             2
           )}*! Seu novo saldo é: *R$ ${profile.balance.toFixed(2)}*.`
         );
-        await sendSuccessReact(originalMessageKey);
         break;
       }
 
       case 'loja':
       case 'comprar': {
-        if (!fullArgs || command === 'loja') {
+        console.log('[DEBUG] Entrando em loja/comprar');
+
+        if (!fullArgs || commandName === 'loja') {
+          console.log('[DEBUG] Mostrando itens da loja');
           let shopList = '🛒 *Itens disponíveis na loja:*\n\n';
           SHOP_ITEMS.forEach((item) => {
-            shopList += `*${item.name}* - R$ ${item.price.toFixed(2)}\n`;
-            shopList += `_${item.description}_\n\n`;
+            shopList += `*${item.name}* - R$ ${item.price.toFixed(2)}\n_${item.description}_\n\n`;
           });
-          shopList += `Para comprar, use: */comprar <nome do item>*`;
+          shopList += `Para comprar, use: */comprar <ID do item>*`;
           await editMessage(sentMessageKey, shopList);
-          await sendSuccessReact(originalMessageKey);
-          return;
+          break;
         }
 
         const itemName = fullArgs.toLowerCase().trim();
+        console.log(`[DEBUG] Tentando comprar: ${itemName}`);
         const itemToBuy = SHOP_ITEMS.find(
           (item) => item.name.toLowerCase() === itemName || item.id.toLowerCase() === itemName
         );
 
         if (!itemToBuy) {
+          console.log('[DEBUG] Item não encontrado');
           await editMessage(
             sentMessageKey,
             `O item "${fullArgs}" não foi encontrado na loja. Use */loja* para ver a lista.`
@@ -225,9 +162,11 @@ async function handle(params) {
           return;
         }
 
-        const profile = getUserProfile(userJid);
+        const { profile } = getUserProfile(economyData, userJid);
+        console.log(`[DEBUG] Saldo atual: ${profile.balance}, Preço: ${itemToBuy.price}`);
 
         if (profile.balance < itemToBuy.price) {
+          console.log('[DEBUG] Saldo insuficiente');
           await editMessage(
             sentMessageKey,
             `Seu saldo (R$ ${profile.balance.toFixed(2)}) é insuficiente para comprar *${
@@ -239,11 +178,8 @@ async function handle(params) {
         }
 
         profile.balance -= itemToBuy.price;
-        if (!Array.isArray(profile.inventory)) {
-          profile.inventory = [];
-        }
         profile.inventory.push(itemToBuy.id);
-        updateUserProfile(userJid, profile);
+        console.log(`[DEBUG] Compra realizada. Novo saldo: ${profile.balance}`);
 
         await editMessage(
           sentMessageKey,
@@ -251,16 +187,17 @@ async function handle(params) {
             2
           )}*! Seu novo saldo é: *R$ ${profile.balance.toFixed(2)}*.`
         );
-        await sendSuccessReact(originalMessageKey);
         break;
       }
 
       case 'inventario': {
-        const profile = getUserProfile(userJid);
+        console.log('[DEBUG] Entrando em inventario');
+        const { profile } = getUserProfile(economyData, userJid);
+
         if (!profile.inventory || profile.inventory.length === 0) {
+          console.log('[DEBUG] Inventário vazio');
           await editMessage(sentMessageKey, '🎒 Seu inventário está vazio.');
-          await sendSuccessReact(originalMessageKey);
-          return;
+          break;
         }
 
         let inventoryList = '🎒 *Seu inventário:*\n\n';
@@ -268,54 +205,42 @@ async function handle(params) {
           acc[id] = (acc[id] || 0) + 1;
           return acc;
         }, {});
+        console.log('[DEBUG] Inventário processado:', itemCounts);
 
         for (const id in itemCounts) {
           const item = SHOP_ITEMS.find((i) => i.id === id);
-          if (item) {
-            inventoryList += `*${item.name}* (x${itemCounts[id]})\n`;
-          }
+          if (item) inventoryList += `*${item.name}* (x${itemCounts[id]})\n`;
         }
 
         await editMessage(sentMessageKey, inventoryList);
-        await sendSuccessReact(originalMessageKey);
         break;
       }
 
       case 'transferir': {
+        console.log('[DEBUG] Entrando em transferir');
         const parts = fullArgs.split(' ');
-        if (parts.length < 2) {
+        const recipientJid = getRecipientJid();
+        const amount = parseInt(parts.find((p) => !isNaN(p)));
+
+        console.log(`[DEBUG] Destinatário: ${recipientJid}, Valor: ${amount}`);
+
+        if (!recipientJid || !amount || amount <= 0) {
+          console.log('[DEBUG] Parâmetros inválidos');
           await editMessage(sentMessageKey, 'Uso correto: */transferir @usuário <valor>*');
           await sendWarningReact(originalMessageKey);
           return;
         }
 
-        const amount = parseInt(parts[1]);
-        const recipientJid =
-          messageInfo.webMessage.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-
-        if (!recipientJid) {
-          await editMessage(sentMessageKey, 'Você precisa mencionar um usuário para transferir.');
-          await sendWarningReact(originalMessageKey);
-          return;
-        }
-
-        if (isNaN(amount) || amount <= 0) {
-          await editMessage(
-            sentMessageKey,
-            'O valor da transferência deve ser um número positivo.'
-          );
-          await sendWarningReact(originalMessageKey);
-          return;
-        }
-
         if (recipientJid === userJid) {
+          console.log('[DEBUG] Tentando transferir para si mesmo');
           await editMessage(sentMessageKey, 'Você não pode transferir dinheiro para si mesmo!');
           await sendWarningReact(originalMessageKey);
           return;
         }
 
-        const senderProfile = getUserProfile(userJid);
+        const { profile: senderProfile } = getUserProfile(economyData, userJid);
         if (senderProfile.balance < amount) {
+          console.log('[DEBUG] Saldo insuficiente para transferência');
           await editMessage(
             sentMessageKey,
             `Seu saldo (R$ ${senderProfile.balance.toFixed(
@@ -326,11 +251,10 @@ async function handle(params) {
           return;
         }
 
-        const recipientProfile = getUserProfile(recipientJid);
+        const { profile: recipientProfile } = getUserProfile(economyData, recipientJid);
         senderProfile.balance -= amount;
         recipientProfile.balance += amount;
-        updateUserProfile(userJid, senderProfile);
-        updateUserProfile(recipientJid, recipientProfile);
+        console.log(`[DEBUG] Transferência concluída. Novo saldo: ${senderProfile.balance}`);
 
         await editMessage(
           sentMessageKey,
@@ -339,24 +263,25 @@ async function handle(params) {
           }! Seu novo saldo é: *R$ ${senderProfile.balance.toFixed(2)}*.`,
           [recipientJid]
         );
-        await sendSuccessReact(originalMessageKey);
         break;
       }
 
       default:
-        await editMessage(sentMessageKey, `Comando de economia não reconhecido: ${command}.`);
+        console.log('[DEBUG] Comando não reconhecido');
+        await editMessage(sentMessageKey, `Comando de economia desconhecido: ${commandName}`);
         await sendWarningReact(originalMessageKey);
-        break;
+        return;
     }
+
+    console.log('[DEBUG] Salvando dados no final do handle');
+    writeEconomyData(fs, path, addonPath, economyData);
+    await sendSuccessReact(originalMessageKey);
   } catch (error) {
-    console.error(`Erro no handle do addon [${messageInfo.addonName}]:`, error);
+    console.error(`[ERROR] Erro CRÍTICO no handle:`, error);
     if (sendErrorReply) {
       await sendErrorReply('Ocorreu um problema interno ao executar este comando.');
     }
   }
 }
 
-// Como este addon não usa gatilhos, exportamos apenas a função `handle`.
-module.exports = {
-  handle,
-};
+module.exports = { handle };
